@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using MSSQLTOMYSQLConverter;
 using Newtonsoft.Json;
 using rokono_cl.Data_Hanlders;
@@ -53,7 +54,7 @@ namespace rokono_cl.CLHandlers
         } 
 
 
-        internal static void ConvertDatabase() 
+        internal static async Task ConvertDatabase() 
         {
             if(Program.SavedConnection == null)
                 Program.SavedConnection = new SavedConnection{
@@ -62,7 +63,7 @@ namespace rokono_cl.CLHandlers
                     Password = Program.Password,
                     Username = Program.User,
                 };
-            DiagramHandlers.GenerateSchema(Program.SavedConnection, Program.SavedConnection.Database,
+             await DiagramHandlers.GenerateSchema(Program.SavedConnection, Program.SavedConnection.Database,
                                            Program.SavedConnection.FilePath, Program.SavedConnection.DbType);
         }  
      
