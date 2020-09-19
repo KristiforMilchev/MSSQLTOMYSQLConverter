@@ -10,6 +10,7 @@ namespace RokonoDbManager.Models
         public string Database { get; set; }
         public int ConnectionId { get; set; }
         public string DbContextPath {get; set;}
+        public int DbType { get; set; }
         
     }
 }

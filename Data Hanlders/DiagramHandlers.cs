@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 using MSSQLTOMYSQLConverter;
 using MSSQLTOMYSQLConverter.Data_Hanlders;
 using rokono_cl.DatabaseHandlers;
@@ -11,30 +12,29 @@ namespace rokono_cl.Data_Hanlders
 {
     public class DiagramHandlers
     {
-        public static void GenerateSchema(SavedConnection parameter, string dbName, string dbFilePath)
+        public static async Task GenerateSchema(SavedConnection parameter, string dbName, string dbFilePath, int databaseType)
         {
-            
             using(var context = new DbManager($"Server={parameter.Host};Database={dbName};User ID={parameter.Username};Password='{parameter.Password}';"))
             {
 
-                var tables = context.GetTables();
+                var tables = await context.GetTables();
                 var dbCreationScript = string.Empty;
                 if(Program.DataBackup)
                     dbCreationScript += "SET GLOBAL FOREIGN_KEY_CHECKS=0;";
                 var tablesForeignKeys = context.GetTableForignKeys();
                 
-                tables.ForEach(x=>{
+                tables.ForEach(async x=>{
                     if(Program.DataBackup)
                         dbCreationScript += context.GetTableRows(x);
-                    var od = context.GetTableData(x,tablesForeignKeys);
+                    var od = await context.GetTableData(x,tablesForeignKeys,databaseType);
                     System.Console.WriteLine(od.CreationgString);
                     dbCreationScript += $"{od.CreationgString}\r\n";
                 });
                 
                 var corelationData = context.GetDbUmlData();
                 dbCreationScript += corelationData;
-               //d System.Windows.Forms.Clipboard.SetText(dbCreationScript);
-               System.Console.WriteLine("Clipboard middleware xclip for Linux is required otherwise the application throws an exception!");
+                //d System.Windows.Forms.Clipboard.SetText(dbCreationScript);
+                System.Console.WriteLine("Clipboard middleware xclip for Linux is required otherwise the application throws an exception!");
                 if(Program.DataBackup)
                     dbCreationScript += "SET GLOBAL FOREIGN_KEY_CHECKS=1;";
 
@@ -61,10 +61,5 @@ namespace rokono_cl.Data_Hanlders
                
             }
          }
-
-         
- 
-
- 
     }
 }

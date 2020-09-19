@@ -7,25 +7,31 @@ namespace rokono_cl.DatabaseHandlers
     using System.Data;
     using System.Data.SqlClient;
     using System.Linq;
+    using System.Threading.Tasks;
+    using MSSQLTOMYSQLConverter.DatabaseHandlers.Databases;
     using MSSQLTOMYSQLConverter.Models;
     using RokonoDbManager.Models;
 
     public class DbManager : IDisposable
     {
         SqlConnection SqlConnection; 
+        public List<BindingRowModel> _localData { get; set; }
         public DbManager(string connectionString)
         {
             SqlConnection = new SqlConnection(connectionString);
         }
 
-        internal List<string> GetTables()
+        internal async Task<List<string>> GetTables()
         {
             var result = new List<string>();
             var query = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'";
-            var reader = ExecuteQuery(query);
-            while (reader.Read())    
-                result.Add(reader.GetString(0));
-            reader.Close();
+            using(var reader = await ExecuteQuery(query))
+            {
+                    while (await reader.ReadAsync()) 
+                    {   
+                        result.Add(reader.GetString(0));
+                    }
+            }
             SqlConnection.Close();
             return result;
         }
@@ -141,205 +147,77 @@ namespace rokono_cl.DatabaseHandlers
         }
         
         
-        public OutboundTable GetTableData(string tableName, List<OutboundTableConnection> foreginKeys)
+        public async Task<OutboundTable> GetTableData(string tableName, List<OutboundTableConnection> foreginKeys, int databaseType)
         {
             var result = new OutboundTable();
          
             var primaryAutoInc = string.Empty;
-            var getPrimaryKey = ExecuteQuery($"SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = N'{tableName}'and COLUMNPROPERTY(object_id(TABLE_NAME), COLUMN_NAME, 'IsIdentity') = 1");
-            while (getPrimaryKey.Read())    
+            
+            using(var primaryReader = await ExecuteQuery($"SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = N'{tableName}'and COLUMNPROPERTY(object_id(TABLE_NAME), COLUMN_NAME, 'IsIdentity') = 1"))
             {
-                primaryAutoInc = getPrimaryKey.GetString(0);
+                while (await primaryReader.ReadAsync())    
+                {
+                    primaryAutoInc = primaryReader.GetString(0);
+                }
             }
-            getPrimaryKey.Close();
             SqlConnection.Close();
-            var query =$"SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = N'{tableName}'";
-            var reader = ExecuteQuery(query);
-           
-            var notNull = "NOT NULL";
-            var tableData = $"CREATE TABLE IF NOT EXISTS {tableName} (";
-            var localData = new List<BindingRowModel>();
-            var i = 0;
-            while (reader.Read())    
-            {
-                
-                if(reader.GetString(3) == "NO")
-                    notNull = "NOT NULL";
-                else
-                    notNull = "";
-                
 
-                if(reader.GetString(0) == primaryAutoInc)
-                    localData.Add(new BindingRowModel{
-                        TableName = reader.GetString(0),
-                        DataType = $"INT AUTO_INCREMENT PRIMARY KEY",
-                        IsNull = notNull
-                    });
-                else if( foreginKeys.Any(x=>x.TableName == tableName && x.ConnectionName == reader.GetString(0)))
-                    localData.Add(new BindingRowModel{
-                        TableName = reader.GetString(0),
-                        DataType = $"INT AUTO_INCREMENT PRIMARY KEY",
-                        IsNull = notNull
-                    });
-                else if(reader.IsDBNull(2))
-                    localData.Add(new BindingRowModel{
-                        TableName = reader.GetString(0),
-                        DataType = $"{DetermineType(reader.GetString(1), reader.IsDBNull(2) ? -1 : reader.GetInt32(2))}",
-                        IsNull = notNull
-                    });
-             }
-            var lastRow = localData.Count;
-            localData.ForEach(x=>{
-                i++;
-                var next = ",";
-                if(i == lastRow)
-                    next = "";
-                if(x.TableName == primaryAutoInc)
-                    tableData += $"{x.TableName} {x.DataType}{next}";
-                else
-                    tableData += $"{x.TableName} {x.DataType} {x.IsNull}{next}";
-            });
-            tableData += " );";
-            result.CreationgString = tableData;
-            reader.Close();
+      
+            var query =$"SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = N'{tableName}'";
+            using(var reader = await ExecuteQuery(query))
+            {
+            
+                var notNull = "NOT NULL";
+                var tableData = $"CREATE TABLE IF NOT EXISTS {tableName} (";
+                var i = 0;
+                switch(databaseType)
+                {
+                    case 1:
+                    _localData = await GetMysqlProvider(_localData,reader,foreginKeys,tableName,primaryAutoInc);
+                    break;
+                }
+                var lastRow = _localData.Count;
+                _localData.ForEach(x=>{
+                    i++;
+                    var next = ",";
+                    if(i == lastRow)
+                        next = "";
+                    if(x.TableName == primaryAutoInc)
+                        tableData += $"{x.TableName} {x.DataType}{next}";
+                    else
+                        tableData += $"{x.TableName} {x.DataType} {x.IsNull}{next}";
+                });
+                tableData += " );";
+                result.CreationgString = tableData;
+            }
             SqlConnection.Close();
 
             return result;
         }
 
-        private string DetermineType(string v, int v1)
+        private async Task<List<BindingRowModel>> GetMysqlProvider(
+            List<BindingRowModel> _localData,
+            SqlDataReader reader,
+            List<OutboundTableConnection> foreginKeys,
+            string tableName,
+            string primaryAutoInc)
         {
-            var res = string.Empty;
-            var lenght = v1 != -1 ? $"({v1.ToString()})" : "";
-
-            switch(v)
+            var result =  new List<BindingRowModel>();
+            using(var sqlProvider = new MySQL(_localData,reader,foreginKeys,tableName,primaryAutoInc))
             {
-                case "char":
-                    if(v1 > 255)
-                        res =  DetermineType("varchar",v1);
-                    else
-                        res = $"CHAR{lenght}"; 
-                break;
-                case "varchar":
-                    if(v1 > 65535)
-                        res =  DetermineType("text", v1);
-                    else
-                        res = $"VARCHAR{lenght}";
-                break;
-                case "text":
-                    res = $"TEXT{lenght}";
-                break;
-                case "nchar":
-                    res = $"VARCHAR{lenght}";
-                break;
-                case "nvarchar":
-                    if(v1 > 65535 && v1 != -1)
-                        DetermineType("text", v1);
-                    else
-                        res = $"VARCHAR{lenght}";
-                break;  
-                case "ntext":
-                    res = $"LONGTEXT{lenght}";
-                break;
-                case "binary":
-                    if(v1 > 65.535 && v1 != -1)
-                        res = $"MEDIUMBLOB{lenght}";
-                    else if(v1 >   16777215 && v1 != -1)
-                        res = $"LONGBLOB{lenght}"; 
-                    
-
-                break;
-                case "varbinary":
-                       if(v1 > 65.535 && v1 != -1)
-                        res = $"MEDIUMBLOB{lenght}";
-                    else if(v1 >   16777215 && v1 != -1)
-                        res = $"LONGBLOB{lenght}"; 
-                break;
-                case "varbinary(max)":
-                       if(v1 > 65.535 && v1 != -1)
-                        res = $"MEDIUMBLOB{lenght}";
-                    else if(v1 >   16777215 && v1 != -1)
-                        res = $"LONGBLOB{lenght}"; 
-                break;
-                case "image":
-                       if(v1 > 65.535 && v1 != -1)
-                        res = $"MEDIUMBLOB{lenght}";
-                    else if(v1 > 16777215 && v1 != -1)
-                        res = $"LONGBLOB{lenght}"; 
-                break;
-                case "bit":
-                    res = $"CHAR"; 
-                break;
-                case "tinyint":
-                    res = $"TINYINT{lenght}";
-                break;
-                case "smallint":
-                    res = $"INT{lenght}";
-                break;
-                case "int":
-                    res = $"INT{lenght}";
-                break;
-                case "bigint":
-                    res = $"BIGINT{lenght}";
-                break;
-                case "decimal":
-                    res =  $"DECIMAL{lenght}";
-                break;
-                case "numeric":
-                    res = $"BIGINT{lenght}";
-
-                break;
-                case "smallmoney":
-                    res = $"INT{lenght}";
-
-                break;
-                case "money":
-                    res =  $"DECIMAL{lenght}";
-
-                break;
-                case "float":
-                    res = $"FLOAT{lenght}";
-                break;
-                case "real":
-                    res =  $"DECIMAL{lenght}";
-
-                break;
-                case "datetime":
-                    res = $"DATETIME";
-                break;
-                case "datetime2":
-                    res = $"DATETIME";
-                break;
-                case "smalldatetime":
-                    res = $"DATETIME";
-
-                break;
-                case "date":
-                    res = $"DATE";
-                break;
-
-                case "time":
-                    res = "TIME";
-                break;
-                case "datetimeoffset":
-
-                break;
-                case "timestamp":
-                    res = "TIMESTAMP";
-                break;
-             
+               result = await sqlProvider.ReadDataResultAsync();
             }
-            return res;
+            return result;
         }
 
-        public SqlDataReader ExecuteQuery(string query)
+        public async Task<SqlDataReader> ExecuteQuery(string query)
         {
             
             SqlCommand command = new SqlCommand(query, SqlConnection);
             try
             {
                 SqlConnection.Open();
-                return command.ExecuteReader();
+                return  await command.ExecuteReaderAsync();
               
             }
             catch (Exception ex)
@@ -351,13 +229,13 @@ namespace rokono_cl.DatabaseHandlers
         #region IDisposable Support
         private bool disposedValue = false; // To detect redundant calls
 
-        protected virtual void Dispose(bool disposing)
+        protected virtual async Task Dispose(bool disposing)
         {
             if (!disposedValue)
             {
                 if (disposing)
                 {
-                    SqlConnection.Close();
+                    await SqlConnection.DisposeAsync();
                 }
 
                 // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
@@ -375,10 +253,10 @@ namespace rokono_cl.DatabaseHandlers
         // }
 
         // This code added to correctly implement the disposable pattern.
-        public void Dispose()
+        public async void Dispose()
         {
             // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
-            Dispose(true);
+             await Dispose(true);
             // TODO: uncomment the following line if the finalizer is overridden above.
             // GC.SuppressFinalize(this);
         }

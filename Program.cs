@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using rokono_cl.CLHandlers;
 using rokono_cl.Data_Hanlders;
 using RokonoDbManager.Models;
@@ -15,7 +16,7 @@ namespace MSSQLTOMYSQLConverter
         public static string FilePath {get; set;}
         public static string Ip {get; set;}
         public static bool DataBackup { get; set; }
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
  
             for(int i = 0; i < args.Length; i++)
@@ -57,7 +58,7 @@ namespace MSSQLTOMYSQLConverter
                         System.Console.WriteLine(SavedConnection.ConnectionString);
                         break;
                     case "-Convert":
-                        InputHandler.ConvertDatabase();
+                        await InputHandler.ConvertDatabase();
                     break;
                      case "--Help":
                         ShowHelpMenu();
