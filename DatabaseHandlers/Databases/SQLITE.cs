@@ -1,3 +1,4 @@
+
 namespace MSSQLTOMYSQLConverter.DatabaseHandlers.Databases
 {
     using System;
@@ -8,15 +9,15 @@ namespace MSSQLTOMYSQLConverter.DatabaseHandlers.Databases
     using MSSQLTOMYSQLConverter.Models;
     using RokonoDbManager.Models;
 
-    public class MySQL : IAsyncDisposable
+    public class SQLITE : IAsyncDisposable
     {
-        
         private List<BindingRowModel> _localData { get; set; }
         private SqlDataReader _reader {get; set;}
         List<OutboundTableConnection> _foreginKeys {get; set;}
         string _tableName {get; set;}
         string _primaryAutoInc {get; set;}
-        public MySQL(List<BindingRowModel> data, SqlDataReader reader,  List<OutboundTableConnection> keys, string tableName, string primaryAutoInc)
+        
+        public SQLITE(List<BindingRowModel> data, SqlDataReader reader,  List<OutboundTableConnection> keys, string tableName, string primaryAutoInc)
         {
             _localData = data;
             _reader = reader;
@@ -24,6 +25,7 @@ namespace MSSQLTOMYSQLConverter.DatabaseHandlers.Databases
             _tableName = tableName;
             _primaryAutoInc = primaryAutoInc;
         }
+
         public async Task< List<BindingRowModel>> ReadDataResultAsync()
         {
             var result = new List<BindingRowModel>();
@@ -39,13 +41,13 @@ namespace MSSQLTOMYSQLConverter.DatabaseHandlers.Databases
                 if(_reader.GetString(0) == _primaryAutoInc)
                     _localData.Add(new BindingRowModel{
                         TableName = _reader.GetString(0),
-                        DataType = $"INT AUTO_INCREMENT PRIMARY KEY",
+                        DataType = $"INTEGER AUTOINCREMENT",
                         IsNull = notNull
                     });
                 else if(_foreginKeys.Any(x=>x.TableName == _tableName && x.ConnectionName == _reader.GetString(0)))
                     _localData.Add(new BindingRowModel{
                         TableName = _reader.GetString(0),
-                        DataType = $"INT AUTO_INCREMENT PRIMARY KEY",
+                        DataType = $"INTEGER AUTOINCREMENT",
                         IsNull = notNull
                     });
                 else if(_reader.IsDBNull(2))
@@ -65,124 +67,92 @@ namespace MSSQLTOMYSQLConverter.DatabaseHandlers.Databases
             switch(value)
             {
                 case "char":
-                    if(valueLenght > 255)
-                        res =  DetermineType("varchar",valueLenght);
-                    else
-                        res = $"CHAR{lenght}"; 
-                break;
+                   res = "TEXT";
+                    break;
                 case "varchar":
-                    if(valueLenght > 65535)
-                        res =  DetermineType("text", valueLenght);
-                    else
-                        res = $"VARCHAR{lenght}";
-                break;
+                   res = "TEXT";
+                    break;
                 case "text":
-                    res = $"TEXT{lenght}";
-                break;
+                    res = $"TEXT";
+                    break;
                 case "nchar":
-                    res = $"VARCHAR{lenght}";
-                break;
+                    res = "TEXT";
+                    break;
                 case "nvarchar":
-                    if(valueLenght > 65535 && valueLenght != -1)
-                        DetermineType("text", valueLenght);
-                    else
-                        res = $"VARCHAR{lenght}";
-                break;  
+                     res = "TEXT";
+                    break;  
                 case "ntext":
-                    res = $"LONGTEXT{lenght}";
-                break;
+                    res = "TEXT";
+                    break;
                 case "binary":
-                    if(valueLenght > 65.535 && valueLenght != -1)
-                        res = $"MEDIUMBLOB{lenght}";
-                    else if(valueLenght >   16777215 && valueLenght != -1)
-                        res = $"LONGBLOB{lenght}"; 
-                    
-
-                break;
+                    res = "BLOB";
+                    break;
                 case "varbinary":
-                       if(valueLenght > 65.535 && valueLenght != -1)
-                        res = $"MEDIUMBLOB{lenght}";
-                    else if(valueLenght >   16777215 && valueLenght != -1)
-                        res = $"LONGBLOB{lenght}"; 
-                break;
+                    res = "BLOB";
+                    break;
                 case "varbinary(max)":
-                       if(valueLenght > 65.535 && valueLenght != -1)
-                        res = $"MEDIUMBLOB{lenght}";
-                    else if(valueLenght >   16777215 && valueLenght != -1)
-                        res = $"LONGBLOB{lenght}"; 
-                break;
+                    res = "BLOB";
+                    break;
                 case "image":
-                       if(valueLenght > 65.535 && valueLenght != -1)
-                        res = $"MEDIUMBLOB{lenght}";
-                    else if(valueLenght > 16777215 && valueLenght != -1)
-                        res = $"LONGBLOB{lenght}"; 
-                break;
+                    res = "BLOB";
+                    break;
                 case "bit":
-                    res = $"CHAR"; 
-                break;
+                    res = "BLOB"; 
+                    break;
                 case "tinyint":
-                    res = $"TINYINT{lenght}";
-                break;
+                    res = "INTEGER";
+                    break;
                 case "smallint":
-                    res = $"INT{lenght}";
-                break;
+                    res = "INTEGER";
+                    break;
                 case "int":
-                    res = $"INT{lenght}";
-                break;
+                    res = "INTEGER";
+                    break;
                 case "bigint":
-                    res = $"BIGINT{lenght}";
-                break;
+                    res = "INTEGER";
+                    break;
                 case "decimal":
-                    res =  $"DECIMAL{lenght}";
-                break;
+                    res = "REAL";
+                    break;
                 case "numeric":
-                    res = $"BIGINT{lenght}";
-
-                break;
+                    res = "REAL";
+                    break;
                 case "smallmoney":
-                    res = $"INT{lenght}";
-
-                break;
+                    res = "REAL";
+                    break;
                 case "money":
-                    res =  $"DECIMAL{lenght}";
-
-                break;
+                    res = "REAL";
+                    break;
                 case "float":
-                    res = $"FLOAT{lenght}";
-                break;
+                    res = "REAL";
+                    break;
                 case "real":
-                    res =  $"DECIMAL{lenght}";
-
-                break;
+                    res = "REAL";
+                    break;
                 case "datetime":
                     res = $"DATETIME";
-                break;
+                    break;
                 case "datetime2":
                     res = $"DATETIME";
-                break;
+                    break;
                 case "smalldatetime":
                     res = $"DATETIME";
-
-                break;
+                    break;
                 case "date":
                     res = $"DATE";
-                break;
-
+                    break;
                 case "time":
-                    res = "TIME";
-                break;
+                    res = "DATETIME";
+                    break;
                 case "datetimeoffset":
-
-                break;
+                    res = "DATETIME";
+                    break;
                 case "timestamp":
-                    res = "TIMESTAMP";
-                break;
-             
+                    res = "DATETIME";
+                    break;
             }
             return res;
         }
- 
-
         public async ValueTask DisposeAsync()
         {
             await _reader.DisposeAsync();

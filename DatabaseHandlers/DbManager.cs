@@ -175,6 +175,9 @@ namespace rokono_cl.DatabaseHandlers
                     case 1:
                     _localData = await GetMysqlProvider(_localData,reader,foreginKeys,tableName,primaryAutoInc);
                     break;
+                    case 2:
+                    _localData = await GetSQliteProvider(_localData,reader,foreginKeys,tableName,primaryAutoInc);
+                    break;
                 }
                 var lastRow = _localData.Count;
                 _localData.ForEach(x=>{
@@ -203,12 +206,29 @@ namespace rokono_cl.DatabaseHandlers
             string primaryAutoInc)
         {
             var result =  new List<BindingRowModel>();
-            using(var sqlProvider = new MySQL(_localData,reader,foreginKeys,tableName,primaryAutoInc))
+            await using (var sqlProvider =  new MySQL(_localData,reader,foreginKeys,tableName,primaryAutoInc))
             {
                result = await sqlProvider.ReadDataResultAsync();
             }
             return result;
         }
+
+
+        private async Task<List<BindingRowModel>> GetSQliteProvider(
+            List<BindingRowModel> _localData,
+            SqlDataReader reader,
+            List<OutboundTableConnection> foreginKeys,
+            string tableName,
+            string primaryAutoInc)
+        {
+            var result =  new List<BindingRowModel>();
+            await using (var sqlProvider =  new SQLITE(_localData,reader,foreginKeys,tableName,primaryAutoInc))
+            {
+               result = await sqlProvider.ReadDataResultAsync();
+            }
+            return result;
+        }
+
 
         public async Task<SqlDataReader> ExecuteQuery(string query)
         {

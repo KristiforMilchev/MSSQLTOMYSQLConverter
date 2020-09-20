@@ -54,7 +54,7 @@ namespace rokono_cl.CLHandlers
         } 
 
 
-        internal static async Task ConvertDatabase() 
+        internal static async Task ConvertDatabase(int conversionType) 
         {
             if(Program.SavedConnection == null)
                 Program.SavedConnection = new SavedConnection{
